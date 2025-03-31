@@ -4,6 +4,20 @@ from opendbc.car.subaru.values import CAR
 Ecu = CarParams.Ecu
 
 FW_VERSIONS = {
+    CAR.SUBARU_CROSSTREK_2024: {
+    (Ecu.abs, 0x7b0, None): [
+      b'\xa2 !e\x01',
+    ],
+    (Ecu.eps, 0x746, None): [
+      b'\x9a\xc2\x01\x00',
+    ],
+    (Ecu.fwdCamera, 0x787, None): [
+      b'\x00\x00el\x1f@ #',
+    ],
+    (Ecu.engine, 0x7e0, None): [
+      b'\xd7!`p\x07',
+    ],
+  },
   CAR.SUBARU_ASCENT: {
     (Ecu.abs, 0x7b0, None): [
       b'\xa5 \x19\x02\x00',

@@ -2,6 +2,18 @@
 
 #include "opendbc/safety/declarations.h"
 
+/* --- ApexPilot compat shim: newer opendbc safety helpers mapped onto this base --- */
+#ifndef APEXPILOT_SAFETY_COMPAT
+#define APEXPILOT_SAFETY_COMPAT
+#ifndef GET_BYTES_LE
+#define GET_BYTES_LE(msg, start, len) GET_BYTES((msg), (start), (len))
+#endif
+static bool msg_matches(const CANPacket_t *msg, unsigned int addr, unsigned int bus) {
+  return ((unsigned int)(msg->addr) == addr) && ((unsigned int)(msg->bus) == bus);
+}
+#endif
+/* --- end ApexPilot compat shim --- */
+
 #define SUBARU_STEERING_LIMITS_GENERATOR(steer_max, rate_up, rate_down)               \
   {                                                                                   \
     .max_torque = (steer_max),                                                        \

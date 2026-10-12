@@ -227,11 +227,6 @@ static bool subaru_tx_hook(const CANPacket_t *msg) {
     }
   }
 
-  // check es_status transmission_rpm limits
-  if (msg->addr == MSG_SUBARU_ES_Status) {
-    int transmission_rpm = (GET_BYTES(msg, 2, 2) & 0x1FFFU);
-    violation |= longitudinal_transmission_rpm_checks(transmission_rpm, SUBARU_LONG_LIMITS);
-  }
 
   if (msg->addr == MSG_SUBARU_ES_UDS_Request) {
     // tester present ('\x02\x3E\x80\x00\x00\x00\x00\x00') is allowed for gen2 longitudinal to keep eyesight disabled

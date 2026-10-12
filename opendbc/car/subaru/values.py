@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum, IntFlag
 
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms, uds
-from opendbc.car.lateral import AngleSteeringLimitsVM
+from opendbc.car.lateral import AngleSteeringLimits
 from opendbc.car.structs import CarParams
 from opendbc.car.docs_definitions import CarFootnote, CarHarness, CarDocs, CarParts, Column
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries, p16
@@ -11,11 +11,6 @@ Ecu = CarParams.Ecu
 
 
 class CarControllerParams:
-  ANGLE_LIMITS: AngleSteeringLimitsVM = AngleSteeringLimitsVM(
-    190,  # deg, EPS faults above ~200
-    MAX_ANGLE_RATE=5,  # deg/frame, comfort rate limit
-  )
-
   def __init__(self, CP):
     self.STEER_STEP = 2                # how often we update the steer cmd
     self.STEER_DELTA_UP = 50           # torque increase per refresh, 0.8s to max
@@ -23,6 +18,12 @@ class CarControllerParams:
     self.STEER_DRIVER_ALLOWANCE = 60   # allowed driver torque before start limiting
     self.STEER_DRIVER_MULTIPLIER = 50  # weight driver torque heavily
     self.STEER_DRIVER_FACTOR = 1       # from dbc
+
+    self.ANGLE_LIMITS: AngleSteeringLimits = AngleSteeringLimits(
+      545,
+      ([0., 5., 35.], [5., .8, .15,]),
+      ([0., 5., 35.], [5., .8, .15,]),
+    )
 
     if CP.flags & SubaruFlags.GLOBAL_GEN2:
       # TODO: lower rate limits, this reaches min/max in 0.5s which negatively affects tuning
@@ -70,7 +71,6 @@ class SubaruFlags(IntFlag):
   # Detected flags
   SEND_INFOTAINMENT = 1
   DISABLE_EYESIGHT = 2
-  HAS_BSM = 128  # blind spot monitoring
 
   # Static flags
   GLOBAL_GEN2 = 4
@@ -221,8 +221,8 @@ class CAR(Platforms):
   )
   SUBARU_CROSSTREK_2025 = SubaruGen2PlatformConfig(
     [SubaruCarDocs("Subaru Crosstrek 2025", "All", car_parts=CarParts.common([CarHarness.subaru_d]))],
-    CarSpecs(mass=1529, wheelbase=2.67, steerRatio=13),
-    flags=SubaruFlags.LKAS_ANGLE,
+    CarSpecs(mass=1529, wheelbase=2.5781, steerRatio=13.5),
+    flags=SubaruFlags.LKAS_ANGLE
   )
 
 
@@ -239,7 +239,6 @@ SUBARU_ALT_VERSION_RESPONSE = bytes([uds.SERVICE_TYPE.READ_DATA_BY_IDENTIFIER + 
   p16(0xf100)
 
 FW_QUERY_CONFIG = FwQueryConfig(
-  fw_version_regex=br"(?:[\x00-\xff]{4,5}|[\x00-\xff]{8}|[\x00-\xff]{10})",
   requests=[
     Request(
       [StdQueries.TESTER_PRESENT_REQUEST, SUBARU_VERSION_REQUEST],
@@ -287,7 +286,7 @@ FW_QUERY_CONFIG = FwQueryConfig(
   ],
   # We don't get the EPS from non-OBD queries on GEN2 cars. Note that we still attempt to match when it exists
   non_essential_ecus={
-    Ecu.eps: [c for c in CAR if c.config.flags & SubaruFlags.GLOBAL_GEN2],
+    Ecu.eps: list(CAR.with_flags(SubaruFlags.GLOBAL_GEN2)),
   }
 )
 

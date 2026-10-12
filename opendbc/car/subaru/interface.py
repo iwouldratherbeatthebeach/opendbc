@@ -18,9 +18,15 @@ class CarInterface(CarInterfaceBase):
     # - replacement for ES_Distance so we can cancel the cruise control
     # - to find the Cruise_Activated bit from the car
     # - proper panda safety setup (use the correct cruise_activated bit, throttle from Throttle_Hybrid, etc)
-    ret.dashcamOnly = bool(ret.flags & (SubaruFlags.PREGLOBAL | SubaruFlags.HYBRID))
-    if ret.flags & SubaruFlags.LKAS_ANGLE:
-      ret.dashcamOnly = is_release or candidate != CAR.SUBARU_CROSSTREK_2025
+    # for LKAS_ANGLE CARS to be upstreamed, we need:
+    # - validate angle safety
+    ret.dashcamOnly = bool((ret.flags & (SubaruFlags.PREGLOBAL | SubaruFlags.HYBRID)) or
+                       ((ret.flags & SubaruFlags.LKAS_ANGLE) and is_release))
+
+    if candidate == CAR.SUBARU_FORESTER_2022:
+      # Gen 1 LKAS angle not tested, can undashcam if not release once we see a test route
+      ret.dashcamOnly = True
+
     ret.autoResumeSng = False
 
     # Detect infotainment message sent from the camera
@@ -28,17 +34,13 @@ class CarInterface(CarInterfaceBase):
       ret.flags |= SubaruFlags.SEND_INFOTAINMENT.value
 
     if ret.flags & SubaruFlags.PREGLOBAL:
-      if 0x25c in fingerprint[0]:
-        ret.flags |= SubaruFlags.HAS_BSM.value
+      ret.enableBsm = 0x25c in fingerprint[0]
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.subaruPreglobal)]
     else:
-      if 0x228 in fingerprint[0]:
-        ret.flags |= SubaruFlags.HAS_BSM.value
+      ret.enableBsm = 0x228 in fingerprint[0]
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.subaru)]
       if ret.flags & SubaruFlags.GLOBAL_GEN2:
         ret.safetyConfigs[0].safetyParam |= SubaruSafetyFlags.GEN2.value
-      if ret.flags & SubaruFlags.LKAS_ANGLE:
-        ret.safetyConfigs[0].safetyParam |= SubaruSafetyFlags.LKAS_ANGLE.value
 
     ret.steerLimitTimer = 0.4
     ret.steerActuatorDelay = 0.1
@@ -48,6 +50,7 @@ class CarInterface(CarInterfaceBase):
 
     if ret.flags & SubaruFlags.LKAS_ANGLE:
       ret.steerControlType = structs.CarParams.SteerControlType.angle
+      ret.safetyConfigs[0].safetyParam |= SubaruSafetyFlags.LKAS_ANGLE.value
 
     elif candidate == CAR.SUBARU_ASCENT:
       ret.steerActuatorDelay = 0.3  # end-to-end angle controller
@@ -93,9 +96,8 @@ class CarInterface(CarInterfaceBase):
     else:
       raise ValueError(f"unknown car: {candidate}")
 
-    # TODO: the longitudinal limits need to be speed-dependent, so alpha long is disabled for now
-    # revert this in the PR that re-enables Subaru longitudinal: https://github.com/commaai/opendbc/pull/3689
-    ret.alphaLongitudinalAvailable = False
+    ret.alphaLongitudinalAvailable = not (ret.flags & (SubaruFlags.GLOBAL_GEN2 | SubaruFlags.PREGLOBAL |
+                                                       SubaruFlags.LKAS_ANGLE | SubaruFlags.HYBRID))
     ret.openpilotLongitudinalControl = alpha_long and ret.alphaLongitudinalAvailable
 
     if ret.flags & SubaruFlags.GLOBAL_GEN2 and ret.openpilotLongitudinalControl:

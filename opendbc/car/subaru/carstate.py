@@ -6,26 +6,20 @@ from opendbc.car.interfaces import CarStateBase
 from opendbc.car.subaru.values import DBC, CanBus, SubaruFlags
 from opendbc.car import CanSignalRateCalculator
 
-from opendbc.sunnypilot.car.subaru.mads import MadsCarState
-from opendbc.sunnypilot.car.subaru.stop_and_go import SnGCarState
 
-
-class CarState(CarStateBase, MadsCarState, SnGCarState):
-  def __init__(self, CP, CP_SP):
-    CarStateBase.__init__(self, CP, CP_SP)
-    MadsCarState.__init__(self, CP, CP_SP)
-    SnGCarState.__init__(self, CP, CP_SP)
+class CarState(CarStateBase):
+  def __init__(self, CP):
+    super().__init__(CP)
     can_define = CANDefine(DBC[CP.carFingerprint][Bus.pt])
     self.shifter_values = can_define.dv["Transmission"]["Gear"]
 
     self.angle_rate_calulator = CanSignalRateCalculator(50)
 
-  def update(self, can_parsers) -> tuple[structs.CarState, structs.CarStateSP]:
+  def update(self, can_parsers) -> structs.CarState:
     cp = can_parsers[Bus.pt]
     cp_cam = can_parsers[Bus.cam]
     cp_alt = can_parsers[Bus.alt]
     ret = structs.CarState()
-    ret_sp = structs.CarStateSP()
 
     throttle_msg = cp.vl["Throttle"] if not (self.CP.flags & SubaruFlags.HYBRID) else cp_alt.vl["Throttle_Hybrid"]
     ret.gasPressed = throttle_msg["Throttle_Pedal"] > 1e-5
@@ -58,7 +52,7 @@ class CarState(CarStateBase, MadsCarState, SnGCarState):
     ret.leftBlinker, ret.rightBlinker = self.update_blinker_from_lamp(50, cp.vl["Dashlights"]["LEFT_BLINKER"],
                                                                       cp.vl["Dashlights"]["RIGHT_BLINKER"])
 
-    if self.CP.enableBsm:
+    if self.CP.flags & SubaruFlags.HAS_BSM:
       ret.leftBlindspot = (cp.vl["BSD_RCTA"]["L_ADJACENT"] == 1) or (cp.vl["BSD_RCTA"]["L_APPROACHING"] == 1)
       ret.rightBlindspot = (cp.vl["BSD_RCTA"]["R_ADJACENT"] == 1) or (cp.vl["BSD_RCTA"]["R_APPROACHING"] == 1)
 
@@ -90,13 +84,13 @@ class CarState(CarStateBase, MadsCarState, SnGCarState):
     cp_es_brake = cp_alt if self.CP.flags & SubaruFlags.GLOBAL_GEN2 else cp_cam
 
     if self.CP.flags & (SubaruFlags.HYBRID | SubaruFlags.LKAS_ANGLE):
-      # ES_DashStatus->Cruise_Activated_Dash is likely intended for the dash display only, as it falls
-      # during user gas override and at standstill. ES_Status is missing on hybrid, so we use ES_Brake instead
-
-      # TODO: ES_Brake->Cruise_Activated has been seen staying high when Crosstrek 2025 angle LKAS user pressed
-      #  brake while engaged at a stop. ES_Status and ES_DashStatus->Signal7 correctly fell, but is either missing or
-      #  always zero on hybrids. Probably need to split angle & hybrid. 0x27 and 0x225 on hybrids may work for them.
-      ret.cruiseState.enabled = cp_es_brake.vl["ES_Brake"]['Cruise_Activated'] != 0
+      # ES_DashStatus->Cruise_Activated_Dash falls during gas override and at standstill.
+      # On Crosstrek 2025, ES_Brake stays high after braking at a stop while ES_Status falls.
+      # Hybrids retain ES_Brake because ES_Status is missing.
+      # TODO: Validate hybrid cruise state. ES_Status/ES_DashStatus->Signal7 are missing or always zero.
+      #  0x27 and 0x225 may be alternatives.
+      cruise_msg = "ES_Status" if self.CP.flags & SubaruFlags.LKAS_ANGLE else "ES_Brake"
+      ret.cruiseState.enabled = cp_es_brake.vl[cruise_msg]['Cruise_Activated'] != 0
       ret.cruiseState.available = cp_cam.vl["ES_DashStatus"]['Cruise_On'] != 0
     else:
       ret.cruiseState.enabled = cp_cruise.vl["CruiseControl"]["Cruise_Activated"] != 0
@@ -143,13 +137,10 @@ class CarState(CarStateBase, MadsCarState, SnGCarState):
     if self.CP.flags & SubaruFlags.SEND_INFOTAINMENT:
       self.es_infotainment_msg = copy.copy(cp_cam.vl["ES_Infotainment"])
 
-    MadsCarState.update_mads(self, ret, can_parsers)
-    SnGCarState.update(self, ret, can_parsers)
-
-    return ret, ret_sp
+    return ret
 
   @staticmethod
-  def get_can_parsers(CP, CP_SP):
+  def get_can_parsers(CP):
     return {
       Bus.pt: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus.main),
       Bus.cam: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus.camera),

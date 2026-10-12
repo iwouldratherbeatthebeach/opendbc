@@ -302,9 +302,12 @@ static safety_config subaru_init(uint16_t param) {
   const uint16_t SUBARU_PARAM_LONGITUDINAL = 2;
   subaru_longitudinal = GET_FLAG(param, SUBARU_PARAM_LONGITUDINAL);
 
+#endif
+
+  // ApexPilot: enable tested Crosstrek angle LKAS regardless of ALLOW_DEBUG
+  // (angle safety limits via steer_angle_cmd_checks stay enforced)
   const uint16_t SUBARU_PARAM_LKAS_ANGLE = 8;
   subaru_lkas_angle = GET_FLAG(param, SUBARU_PARAM_LKAS_ANGLE);
-#endif
 
   safety_config ret;
   if (subaru_lkas_angle) {

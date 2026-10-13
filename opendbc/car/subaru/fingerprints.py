@@ -598,3 +598,19 @@ FW_VERSIONS = {
     ],
   },
 }
+
+
+# === ApexPilot: Crosstrek Wilderness 2024 firmware (captured from the actual car) ===
+_apexpilot_crosstrek_fw = {
+  (Ecu.abs, 0x7b0, None): [b'\xa2 $\x18\x04'],
+  (Ecu.eps, 0x746, None): [b'*\xd0\x00\n\x05'],
+  (Ecu.fwdCamera, 0x787, None): [b'\x1b!\x08\x00D\x11!\x08\x01;', b' \x02\x0e'],
+  (Ecu.engine, 0x7a2, None): [b'\xe8"ap\x07'],
+  (Ecu.transmission, 0x7a3, None): [b'@\x127cp'],
+}
+_apx_ct = FW_VERSIONS.setdefault(CAR.SUBARU_CROSSTREK_2025, {})
+for _apx_k, _apx_vs in _apexpilot_crosstrek_fw.items():
+    _apx_ct.setdefault(_apx_k, [])
+    for _apx_v in _apx_vs:
+        if _apx_v not in _apx_ct[_apx_k]:
+            _apx_ct[_apx_k].append(_apx_v)
